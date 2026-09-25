@@ -1,116 +1,90 @@
-//this file is part of notepad++
-//Copyright (C)2022 Don HO <don.h@free.fr>
-//
-//This program is free software; you can redistribute it and/or
-//modify it under the terms of the GNU General Public License
-//as published by the Free Software Foundation; either
-//version 2 of the License, or (at your option) any later version.
-//
-//This program is distributed in the hope that it will be useful,
-//but WITHOUT ANY WARRANTY; without even the implied warranty of
-//MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-//GNU General Public License for more details.
-//
-//You should have received a copy of the GNU General Public License
-//along with this program; if not, write to the Free Software
-//Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
-
+// WINDOWS-ONLY. Cannot be compiled or tested in this repo's Linux
+// sandbox -- see ../../CLAUDE.md for what has and hasn't been verified.
 #include "PluginDefinition.h"
-#include "menuCmdID.h"
+#include "../xnglo_core/core.h"
 
-//
-// The plugin data that Notepad++ needs
-//
-FuncItem funcItem[nbFunc];
+#include <vector>
 
-//
-// The data of Notepad++ that you can use in your plugin commands
-//
-NppData nppData;
+namespace {
 
-//
-// Initialize your plugin data here
-// It will be called while plugin loading   
-void pluginInit(HANDLE /*hModule*/)
-{
+NppData g_nppData;
+FuncItem g_funcItems[2];
+
+// Scintilla message constants this plugin needs (subset -- the full set
+// lives in Scintilla.h, shipped with the Notepad++ plugin template; only
+// what's used here is duplicated to keep this file self-contained).
+constexpr int SCI_GETSELECTIONSTART = 2143;
+constexpr int SCI_GETSELECTIONEND = 2145;
+constexpr int SCI_GETTEXTRANGE = 2162;
+constexpr int SCI_REPLACESEL = 2170;
+constexpr int SCI_GETCODEPAGE = 2137;
+constexpr int SC_CP_UTF8 = 65001;
+
+struct Sci_TextRange {
+  struct { long cpMin; long cpMax; } chrg;
+  char* lpstrText;
+};
+
+HWND current_scintilla() {
+  int which = -1;
+  ::SendMessage(g_nppData._nppHandle, /*NPPM_GETCURRENTSCINTILLA*/ 2000 + 4, 0,
+                reinterpret_cast<LPARAM>(&which));
+  return which == 0 ? g_nppData._scintillaMainHandle : g_nppData._scintillaSecondHandle;
 }
 
-//
-// Here you can do the clean up, save the parameters (if any) for the next session
-//
-void pluginCleanUp()
-{
+// Reads the current selection as UTF-8, runs `transform` over it, and
+// writes the result back, replacing the selection. Notepad++ documents
+// (Scintilla buffers) aren't guaranteed UTF-8 -- if the buffer's code
+// page isn't SC_CP_UTF8 this bails out rather than mangling non-UTF-8
+// bytes as if they were, since xnglo_core::to_xi38/to_u38 assume UTF-8
+// input.
+void transliterate_selection(std::string (*transform)(const std::string&)) {
+  HWND sci = current_scintilla();
+  if (::SendMessage(sci, SCI_GETCODEPAGE, 0, 0) != SC_CP_UTF8) {
+    ::MessageBox(g_nppData._nppHandle,
+                 TEXT("This document's encoding isn't UTF-8. Switch it to UTF-8 ")
+                 TEXT("(Encoding menu) before transliterating, or the selected text ")
+                 TEXT("may come through wrong."),
+                 TEXT("htr-xnglo"), MB_OK | MB_ICONWARNING);
+    return;
+  }
+
+  int start = static_cast<int>(::SendMessage(sci, SCI_GETSELECTIONSTART, 0, 0));
+  int end = static_cast<int>(::SendMessage(sci, SCI_GETSELECTIONEND, 0, 0));
+  if (start == end) return; // nothing selected
+
+  std::vector<char> buf(static_cast<size_t>(end - start) + 1, 0);
+  Sci_TextRange tr;
+  tr.chrg.cpMin = start;
+  tr.chrg.cpMax = end;
+  tr.lpstrText = buf.data();
+  ::SendMessage(sci, SCI_GETTEXTRANGE, 0, reinterpret_cast<LPARAM>(&tr));
+
+  std::string selected(buf.data());
+  std::string result = transform(selected);
+  ::SendMessage(sci, SCI_REPLACESEL, 0, reinterpret_cast<LPARAM>(result.c_str()));
 }
 
-//
-// Initialization of your plugin commands
-// You should fill your plugins commands here
-void commandMenuInit()
-{
+}  // namespace
 
-    //--------------------------------------------//
-    //-- STEP 3. CUSTOMIZE YOUR PLUGIN COMMANDS --//
-    //--------------------------------------------//
-    // with function :
-    // setCommand(int index,                      // zero based number to indicate the order of command
-    //            TCHAR *commandName,             // the command name that you want to see in plugin menu
-    //            PFUNCPLUGINCMD functionPointer, // the symbol of function (function pointer) associated with this command. The body should be defined below. See Step 4.
-    //            ShortcutKey *shortcut,          // optional. Define a shortcut to trigger this command
-    //            bool check0nInit                // optional. Make this menu item be checked visually
-    //            );
-    setCommand(0, TEXT("Hello Notepad++"), hello, NULL, false);
-    setCommand(1, TEXT("Hello (with dialog)"), helloDlg, NULL, false);
+void setNppData(NppData notepadPlusData) { g_nppData = notepadPlusData; }
+
+void menu_transliterate_xi38() { transliterate_selection(xnglo::to_xi38); }
+void menu_transliterate_u38() { transliterate_selection(xnglo::to_u38); }
+
+FuncItem* getFuncsArray(int* nbF) {
+  lstrcpy(g_funcItems[0]._itemName, TEXT("Transliterate selection -> xi38 (full romanization)"));
+  g_funcItems[0]._pFunc = menu_transliterate_xi38;
+  g_funcItems[0]._init2Check = false;
+  g_funcItems[0]._pShKey = nullptr;
+
+  lstrcpy(g_funcItems[1]._itemName, TEXT("Transliterate selection -> u38 (keep native letters)"));
+  g_funcItems[1]._pFunc = menu_transliterate_u38;
+  g_funcItems[1]._init2Check = false;
+  g_funcItems[1]._pShKey = nullptr;
+
+  *nbF = 2;
+  return g_funcItems;
 }
 
-//
-// Here you can do the clean up (especially for the shortcut)
-//
-void commandMenuCleanUp()
-{
-	// Don't forget to deallocate your shortcut here
-}
-
-
-//
-// This function help you to initialize your plugin commands
-//
-bool setCommand(size_t index, TCHAR *cmdName, PFUNCPLUGINCMD pFunc, ShortcutKey *sk, bool check0nInit) 
-{
-    if (index >= nbFunc)
-        return false;
-
-    if (!pFunc)
-        return false;
-
-    lstrcpy(funcItem[index]._itemName, cmdName);
-    funcItem[index]._pFunc = pFunc;
-    funcItem[index]._init2Check = check0nInit;
-    funcItem[index]._pShKey = sk;
-
-    return true;
-}
-
-//----------------------------------------------//
-//-- STEP 4. DEFINE YOUR ASSOCIATED FUNCTIONS --//
-//----------------------------------------------//
-void hello()
-{
-    // Open a new document
-    ::SendMessage(nppData._nppHandle, NPPM_MENUCOMMAND, 0, IDM_FILE_NEW);
-
-    // Get the current scintilla
-    int which = -1;
-    ::SendMessage(nppData._nppHandle, NPPM_GETCURRENTSCINTILLA, 0, (LPARAM)&which);
-    if (which == -1)
-        return;
-    HWND curScintilla = (which == 0)?nppData._scintillaMainHandle:nppData._scintillaSecondHandle;
-
-    // Say hello now :
-    // Scintilla control has no Unicode mode, so we use (char *) here
-    ::SendMessage(curScintilla, SCI_SETTEXT, 0, (LPARAM)"Hello, Notepad++!");
-}
-
-void helloDlg()
-{
-    ::MessageBox(NULL, TEXT("Hello, Notepad++!"), TEXT("Notepad++ Plugin Template"), MB_OK);
-}
+void pluginCleanUp() {}
