@@ -128,7 +128,7 @@
   <ItemDefinitionGroup>
     <ClCompile>
       <!-- xnglo_core/core.cpp has literal UTF-8 Devanagari text in string
-           literals (क्ष / ज्ञ) -- /utf-8 tells MSVC to read the source
+           literals (क्ष / ज्ञ); /utf-8 tells MSVC to read the source
            files as UTF-8 instead of guessing from the system codepage. -->
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
