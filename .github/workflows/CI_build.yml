@@ -10,8 +10,11 @@ jobs:
       fail-fast: false
       max-parallel: 6
       matrix:
-        build_configuration: [Release, Debug]
-        build_platform: [x64, Win32, ARM64]
+        # TEMP: narrowed to just x64/Release while diagnosing the first
+        # build failure -- restore [Release, Debug] x [x64, Win32, ARM64]
+        # once this passes.
+        build_configuration: [Release]
+        build_platform: [x64]
 
     steps:
     - name: Checkout repo
@@ -22,7 +25,15 @@ jobs:
 
     - name: MSBuild of plugin dll
       working-directory: vs.proj\
-      run: msbuild NppPluginTemplate.vcxproj /m /p:configuration="${{ matrix.build_configuration }}" /p:platform="${{ matrix.build_platform }}"
+      shell: pwsh
+      run: |
+        msbuild NppPluginTemplate.vcxproj /m /p:configuration="${{ matrix.build_configuration }}" /p:platform="${{ matrix.build_platform }}" 2>&1 | Tee-Object -FilePath build.log
+        $exitCode = $LASTEXITCODE
+        Select-String -Path build.log -Pattern "error" | ForEach-Object {
+          $line = $_.Line -replace '%', '%25' -replace "`r", '' -replace "`n", '%0A'
+          Write-Output "::error::$line"
+        }
+        exit $exitCode
 
     - name: Archive artifacts for x64
       if: matrix.build_platform == 'x64' && matrix.build_configuration == 'Release'
