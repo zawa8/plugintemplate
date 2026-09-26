@@ -1,14 +1,9 @@
-// WINDOWS-ONLY. Cannot be compiled or tested in this repo's Linux
-// sandbox -- see ../../CLAUDE.md.
+// WINDOWS-ONLY (Win32 API + Notepad++ SDK).
 #pragma once
-
-#ifndef _WIN32
-#error "PluginDefinition.h is Windows-only (Win32 API + Notepad++ SDK)."
-#endif
 
 #include "PluginInterface.h"
 
-// Called from dllmain.cpp's NppData setter.
+// Called from dllmain.cpp's setInfo export.
 void setNppData(NppData notepadPlusData);
 
 // Called from dllmain.cpp's getFuncsArray export.

@@ -1,7 +1,7 @@
-// WINDOWS-ONLY. Cannot be compiled or tested in this repo's Linux
-// sandbox -- see ../../CLAUDE.md for what has and hasn't been verified.
+// WINDOWS-ONLY. Built via GitHub Actions (see ../.github/workflows/) --
+// not manually verified against a real Notepad++ install yet.
 #include "PluginDefinition.h"
-#include "../xnglo_core/core.h"
+#include "xnglo_core/core.h"
 
 #include <vector>
 
@@ -10,24 +10,9 @@ namespace {
 NppData g_nppData;
 FuncItem g_funcItems[2];
 
-// Scintilla message constants this plugin needs (subset -- the full set
-// lives in Scintilla.h, shipped with the Notepad++ plugin template; only
-// what's used here is duplicated to keep this file self-contained).
-constexpr int SCI_GETSELECTIONSTART = 2143;
-constexpr int SCI_GETSELECTIONEND = 2145;
-constexpr int SCI_GETTEXTRANGE = 2162;
-constexpr int SCI_REPLACESEL = 2170;
-constexpr int SCI_GETCODEPAGE = 2137;
-constexpr int SC_CP_UTF8 = 65001;
-
-struct Sci_TextRange {
-  struct { long cpMin; long cpMax; } chrg;
-  char* lpstrText;
-};
-
 HWND current_scintilla() {
   int which = -1;
-  ::SendMessage(g_nppData._nppHandle, /*NPPM_GETCURRENTSCINTILLA*/ 2000 + 4, 0,
+  ::SendMessage(g_nppData._nppHandle, NPPM_GETCURRENTSCINTILLA, 0,
                 reinterpret_cast<LPARAM>(&which));
   return which == 0 ? g_nppData._scintillaMainHandle : g_nppData._scintillaSecondHandle;
 }
@@ -42,23 +27,23 @@ void transliterate_selection(std::string (*transform)(const std::string&)) {
   HWND sci = current_scintilla();
   if (::SendMessage(sci, SCI_GETCODEPAGE, 0, 0) != SC_CP_UTF8) {
     ::MessageBox(g_nppData._nppHandle,
-                 TEXT("This document's encoding isn't UTF-8. Switch it to UTF-8 ")
-                 TEXT("(Encoding menu) before transliterating, or the selected text ")
-                 TEXT("may come through wrong."),
-                 TEXT("htr-xnglo"), MB_OK | MB_ICONWARNING);
+                 L"This document's encoding isn't UTF-8. Switch it to UTF-8 "
+                 L"(Encoding menu) before transliterating, or the selected text "
+                 L"may come through wrong.",
+                 L"htr-xnglo", MB_OK | MB_ICONWARNING);
     return;
   }
 
-  int start = static_cast<int>(::SendMessage(sci, SCI_GETSELECTIONSTART, 0, 0));
-  int end = static_cast<int>(::SendMessage(sci, SCI_GETSELECTIONEND, 0, 0));
+  Sci_Position start = static_cast<Sci_Position>(::SendMessage(sci, SCI_GETSELECTIONSTART, 0, 0));
+  Sci_Position end = static_cast<Sci_Position>(::SendMessage(sci, SCI_GETSELECTIONEND, 0, 0));
   if (start == end) return; // nothing selected
 
   std::vector<char> buf(static_cast<size_t>(end - start) + 1, 0);
-  Sci_TextRange tr;
+  Sci_TextRangeFull tr;
   tr.chrg.cpMin = start;
   tr.chrg.cpMax = end;
   tr.lpstrText = buf.data();
-  ::SendMessage(sci, SCI_GETTEXTRANGE, 0, reinterpret_cast<LPARAM>(&tr));
+  ::SendMessage(sci, SCI_GETTEXTRANGEFULL, 0, reinterpret_cast<LPARAM>(&tr));
 
   std::string selected(buf.data());
   std::string result = transform(selected);
@@ -73,12 +58,12 @@ void menu_transliterate_xi38() { transliterate_selection(xnglo::to_xi38); }
 void menu_transliterate_u38() { transliterate_selection(xnglo::to_u38); }
 
 FuncItem* getFuncsArray(int* nbF) {
-  lstrcpy(g_funcItems[0]._itemName, TEXT("Transliterate selection -> xi38 (full romanization)"));
+  wcscpy_s(g_funcItems[0]._itemName, menuItemSize, L"Transliterate selection -> xi38 (full romanization)");
   g_funcItems[0]._pFunc = menu_transliterate_xi38;
   g_funcItems[0]._init2Check = false;
   g_funcItems[0]._pShKey = nullptr;
 
-  lstrcpy(g_funcItems[1]._itemName, TEXT("Transliterate selection -> u38 (keep native letters)"));
+  wcscpy_s(g_funcItems[1]._itemName, menuItemSize, L"Transliterate selection -> u38 (keep native letters)");
   g_funcItems[1]._pFunc = menu_transliterate_u38;
   g_funcItems[1]._init2Check = false;
   g_funcItems[1]._pShKey = nullptr;

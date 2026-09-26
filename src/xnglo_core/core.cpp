@@ -182,7 +182,7 @@ std::string to_xi38(const std::string& utf8_input) {
   for (char32_t cp : cps) {
     const ScriptTable* t = table_for(cp);
     if (t) {
-      out += t->map[cp - t->base];
+      out += t->map[static_cast<size_t>(cp) - static_cast<size_t>(t->base)];
     } else {
       utf8_append(out, cp);
     }

@@ -1,9 +1,9 @@
-// WINDOWS-ONLY. Cannot be compiled or tested in this repo's Linux
-// sandbox -- see ../../CLAUDE.md.
+// WINDOWS-ONLY. Built via GitHub Actions (see ../.github/workflows/) --
+// not manually verified against a real Notepad++ install yet.
 //
 // Required exports for any Notepad++ plugin DLL: isUnicode, getName,
-// setInfo, beNotified, messageProc, getFuncsArray (see the official
-// plugin template for the full contract this mirrors).
+// setInfo, beNotified, messageProc, getFuncsArray -- signatures declared
+// in PluginInterface.h, matched here exactly.
 #include "PluginDefinition.h"
 
 BOOL APIENTRY DllMain(HANDLE /*hModule*/, DWORD reasonForCall, LPVOID /*lpReserved*/) {
@@ -21,8 +21,8 @@ extern "C" __declspec(dllexport) void setInfo(NppData notepadPlusData) {
   setNppData(notepadPlusData);
 }
 
-extern "C" __declspec(dllexport) const TCHAR* getName() {
-  return TEXT("htr-xnglo");
+extern "C" __declspec(dllexport) const wchar_t* getName() {
+  return L"htr-xnglo";
 }
 
 extern "C" __declspec(dllexport) FuncItem* getFuncsArray(int* nbF) {
@@ -30,8 +30,7 @@ extern "C" __declspec(dllexport) FuncItem* getFuncsArray(int* nbF) {
 }
 
 extern "C" __declspec(dllexport) void beNotified(SCNotification* /*notifyCode*/) {
-  // No notifications handled yet (nothing needs NPPN_SHUTDOWN etc. so far
-  // -- pluginCleanUp() is a no-op currently).
+  // No notifications handled yet (pluginCleanUp() is a no-op currently).
 }
 
 extern "C" __declspec(dllexport) LRESULT messageProc(UINT /*Message*/, WPARAM /*wParam*/, LPARAM /*lParam*/) {
